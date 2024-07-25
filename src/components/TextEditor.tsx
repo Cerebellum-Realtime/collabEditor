@@ -5,6 +5,7 @@ import { useParams } from "react-router-dom";
 import { cerebellum } from "../socket";
 import { Delta } from "quill/core";
 import { v4 as uuidV4 } from "uuid";
+import { usePresence } from "@cerebellum/sdk";
 const SAVE_INTERVAL_MS = 2000;
 
 const TOOLBAR_OPTIONS = [
@@ -33,10 +34,15 @@ export default function TextEditor() {
   const [loading, setLoading] = useState(true);
   const [documentLoaded, setDocumentLoaded] = useState(false);
   const [userId] = useState(uuidV4());
+  const { presenceData, updatePresenceInfo } = usePresence(
+    cerebellum,
+    "cursor",
+    { x: "333", y: "324" }
+  );
+
   //They have to give every user who sends a message a unique id
   // We give a client id to every user and put it on the message when they send it
   //Socket.io will give us a unique id for each client as a socketId
-
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
       const quill = new Quill(editorRef.current, {
@@ -61,7 +67,7 @@ export default function TextEditor() {
             sortDirection: "descending",
           }
         );
-        console.log(document);
+
         if (document.messages.length > 0) {
           const delta = JSON.parse(document.messages[0].content);
           quillRef.current?.setContents(delta);
@@ -104,7 +110,7 @@ export default function TextEditor() {
       source: string
     ) => {
       if (source !== "user") return;
-      console.log("text-change", delta);
+      // console.log("text-change", delta);
       cerebellum.publish(`text-change:${documentId}`, {
         userId,
         delta,
@@ -134,6 +140,15 @@ export default function TextEditor() {
     };
   }, [documentId, userId]);
 
+  const handlePointerMove = (event: any) => {
+    const cursor = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    updatePresenceInfo(cursor);
+  };
+
   return (
     <div className="page-center-wrapper">
       {loading && (
@@ -142,41 +157,48 @@ export default function TextEditor() {
         </div>
       )}
       <div className="page-center">
-        <div className="container" ref={editorRef}></div>;
+        <div
+          className="container"
+          ref={editorRef}
+          onPointerMove={handlePointerMove}
+        ></div>
+        {/* {console.log(presenceData)} */}
+        {presenceData.map(({ socketId, x, y }) => {
+          // console.log(socketId === cerebellum.getSocket().id);
+          if (socketId === cerebellum.getSocket().id) return;
+          // console.log(socketId);
+          return (
+            <div
+              key={socketId}
+              className="cursor"
+              style={{
+                left: `${x}px`,
+                top: `${y}px`,
+                position: "absolute",
+                width: "10px",
+                height: "10px",
+                backgroundColor: "red",
+                borderRadius: "50%",
+                pointerEvents: "none",
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
 /*
+[
+  { socketId: string, x: string, y: string},
+  { socketId: string, x: string, y: string},
+]
+  Implementing live cursors
+  - Client visits site
+  - They are registered to presence of other cursors
 
-  input field (text)
-    - only you can edit this input field
+  - I don't want a full re-render every time someone's cursor changes
 
-  I believe that socket.io will give us a unique id for each client
-    - we can save this to the cerebellum class as a property
-    - we include this on every message sent to the server
-
-  Now
-    {createdAt:
-     contents:}
-
-  Proposed
-    {createdAT:
-     contents:
-     socketId: (or clientId)
-  
-  Currently when you send a message
-    - the message is sent to the cerebellum server
-    - the message is saved with queue to the database
-    - the message is sent to all connected clients including the sender
-    - the clients receive the message and update their local state
-
-  The client does not receive the message that is send to the server by themselves
-    - the client sends the message to the server
-    - the client updates their local state
-    - the message is saved with queue to the database
-    - the message is sent to all connected clients excluding the sender
-    - the clients receive the message and update their local state
-  button (send)
+  The cursor is tied to an event that fires `onPointerMove`
 */

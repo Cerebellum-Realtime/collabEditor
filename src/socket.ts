@@ -14,4 +14,5 @@ export const cerebellum = await Cerebellum(URL, {
   reconnectionDelay: 5000, // Delay between reconnection
   reconnectionDelayMax: 5000, // Maximum delay between reconnection
   timeout: 20000, // Before a connection attempt is considered failed
+  // API_KEY: "SAMPLE_API_KEY",
 });

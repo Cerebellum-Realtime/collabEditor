@@ -5,7 +5,8 @@ import { useParams } from "react-router-dom";
 import { cerebellum } from "../socket";
 import { Delta } from "quill/core";
 import { v4 as uuidV4 } from "uuid";
-import { usePresence } from "@cerebellum/sdk";
+import { usePresence } from "./usePresence";
+import { State } from "@cerebellum/sdk/dist/types";
 const SAVE_INTERVAL_MS = 2000;
 
 const TOOLBAR_OPTIONS = [
@@ -26,7 +27,9 @@ type Message = {
     userId: string;
   };
 };
-
+interface State {
+  [key: string]: string;
+}
 export default function TextEditor() {
   const { id: documentId } = useParams();
   const quillRef = useRef<Quill | null>(null);
@@ -34,15 +37,25 @@ export default function TextEditor() {
   const [loading, setLoading] = useState(true);
   const [documentLoaded, setDocumentLoaded] = useState(false);
   const [userId] = useState(uuidV4());
+  const [curserColor, setCurseColor] = useState("black");
   const { presenceData, updatePresenceInfo } = usePresence(
     cerebellum,
-    "cursor",
-    { x: "333", y: "324" }
+    `cursor:${documentId}`,
+    {}
   );
 
-  //They have to give every user who sends a message a unique id
-  // We give a client id to every user and put it on the message when they send it
-  //Socket.io will give us a unique id for each client as a socketId
+  useEffect(() => {
+    const getRandomColor = () => {
+      const letters = "0123456789ABCDEF";
+      let color = "#";
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      setCurseColor(color);
+    };
+    getRandomColor();
+  }, []);
+
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
       const quill = new Quill(editorRef.current, {
@@ -140,12 +153,11 @@ export default function TextEditor() {
     };
   }, [documentId, userId]);
 
-  const handlePointerMove = (event: any) => {
+  const handlePointerMove = (event) => {
     const cursor = {
       x: event.clientX,
       y: event.clientY,
     };
-
     updatePresenceInfo(cursor);
   };
 
@@ -177,7 +189,7 @@ export default function TextEditor() {
                 position: "absolute",
                 width: "10px",
                 height: "10px",
-                backgroundColor: "red",
+                backgroundColor: curserColor,
                 borderRadius: "50%",
                 pointerEvents: "none",
               }}

@@ -6,7 +6,6 @@ import { cerebellum } from "../socket";
 import { Delta } from "quill/core";
 import { v4 as uuidV4 } from "uuid";
 import { usePresence } from "./usePresence";
-import { State } from "@cerebellum/sdk/dist/types";
 const SAVE_INTERVAL_MS = 2000;
 
 const TOOLBAR_OPTIONS = [

@@ -55,7 +55,7 @@ export const usePresence = (
       if (currentChannel) {
         console.log("leaving presence set");
         cerebellum.leavePresenceSet(currentChannel);
-        cerebellum.off("connect", handleSocketConnect);
+        cerebellum.off("reconnect", handleSocketConnect);
         cerebellum.unsubscribeFromPresenceJoins(
           currentChannel,
           handlePresenceJoin

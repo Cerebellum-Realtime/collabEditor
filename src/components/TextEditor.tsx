@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
 import { useParams } from "react-router-dom";
-import { cerebellum } from "../socket";
 import { Delta } from "quill/core";
-import { v4 as uuidV4 } from "uuid";
-import { usePresence } from "./usePresence";
+import { useCerebellum } from "@cerebellum/sdk";
+import { Message } from "@cerebellum/sdk/dist/types";
+import QuillCursors from "quill-cursors";
+
 const SAVE_INTERVAL_MS = 2000;
 
 const TOOLBAR_OPTIONS = [
@@ -20,46 +21,30 @@ const TOOLBAR_OPTIONS = [
   ["clean"],
 ];
 
-type Message = {
-  content: {
-    delta: Delta;
-    userId: string;
-  };
-};
-interface State {
-  [key: string]: string;
-}
 export default function TextEditor() {
+  const cerebellum = useCerebellum();
   const { id: documentId } = useParams();
   const quillRef = useRef<Quill | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [documentLoaded, setDocumentLoaded] = useState(false);
-  const [userId] = useState(uuidV4());
-  const [curserColor, setCurseColor] = useState("black");
-  const { presenceData, updatePresenceInfo } = usePresence(
-    cerebellum,
-    `cursor:${documentId}`,
-    {}
-  );
-
-  useEffect(() => {
-    const getRandomColor = () => {
-      const letters = "0123456789ABCDEF";
-      let color = "#";
-      for (let i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-      }
-      setCurseColor(color);
-    };
-    getRandomColor();
-  }, []);
 
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
+      Quill.register("modules/cursors", QuillCursors);
+
       const quill = new Quill(editorRef.current, {
         theme: "snow",
-        modules: { toolbar: TOOLBAR_OPTIONS },
+        modules: {
+          toolbar: TOOLBAR_OPTIONS,
+          cursors: {
+            template: '<div class="custom-cursor">...</div>',
+            hideDelayMs: 5000,
+            hideSpeedMs: 0,
+            selectionChangeSource: null,
+            transformOnTextChange: true,
+          },
+        },
       });
       quillRef.current = quill;
       quillRef.current.disable();
@@ -97,7 +82,7 @@ export default function TextEditor() {
     setTimeout(() => {
       getDocument();
     }, 1000);
-  }, [documentId]);
+  }, [documentId, cerebellum]);
 
   useEffect(() => {
     if (quillRef.current == null && !documentLoaded) return;
@@ -112,7 +97,7 @@ export default function TextEditor() {
     return () => {
       clearInterval(interval);
     };
-  }, [quillRef, documentId, documentLoaded]);
+  }, [quillRef, documentId, documentLoaded, cerebellum]);
 
   useEffect(() => {
     if (quillRef.current == null) return;
@@ -122,9 +107,7 @@ export default function TextEditor() {
       source: string
     ) => {
       if (source !== "user") return;
-      // console.log("text-change", delta);
       cerebellum.publish(`text-change:${documentId}`, {
-        userId,
         delta,
       });
     };
@@ -132,7 +115,8 @@ export default function TextEditor() {
     quillRef.current.on("text-change", handleTextChange);
 
     const handleRemoteChanges = (message: Message) => {
-      if (message.content.userId === userId) return;
+      console.log(message, cerebellum.socketId);
+      if (cerebellum.socketId === message.socketId) return;
       const delta = message.content.delta;
       quillRef.current?.updateContents(delta);
     };
@@ -150,15 +134,7 @@ export default function TextEditor() {
         handleRemoteChanges
       );
     };
-  }, [documentId, userId]);
-
-  const handlePointerMove = (event) => {
-    const cursor = {
-      x: event.clientX,
-      y: event.clientY,
-    };
-    updatePresenceInfo(cursor);
-  };
+  }, [documentId, cerebellum]);
 
   return (
     <div className="page-center-wrapper">
@@ -168,33 +144,7 @@ export default function TextEditor() {
         </div>
       )}
       <div className="page-center">
-        <div
-          className="container"
-          ref={editorRef}
-          onPointerMove={handlePointerMove}
-        ></div>
-        {/* {console.log(presenceData)} */}
-        {presenceData.map(({ socketId, x, y }) => {
-          // console.log(socketId === cerebellum.getSocket().id);
-          if (socketId === cerebellum.getSocket().id) return;
-          // console.log(socketId);
-          return (
-            <div
-              key={socketId}
-              className="cursor"
-              style={{
-                left: `${x}px`,
-                top: `${y}px`,
-                position: "absolute",
-                width: "10px",
-                height: "10px",
-                backgroundColor: curserColor,
-                borderRadius: "50%",
-                pointerEvents: "none",
-              }}
-            />
-          );
-        })}
+        <div className="container" ref={editorRef}></div>
       </div>
     </div>
   );
